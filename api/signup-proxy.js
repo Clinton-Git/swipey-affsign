@@ -4,7 +4,7 @@ const puppeteer = require('puppeteer-core');
 
 // Ensure Node serverless runtime (NOT edge)
 module.exports.config = {
-  runtime: 'nodejs20.x'
+  runtime: 'nodejs18.x'
   // regions: ['iad1'] // optionally pin a region
 };
 
@@ -58,13 +58,21 @@ module.exports = async function handler(req, res) {
     console.log('Chromium path:', exe);
 
     browser = await puppeteer.launch({
-      args: chromium.args,
-      defaultViewport: { width: 1280, height: 900 },
       executablePath: exe,
       headless: chromium.headless,
+      args: [
+        ...chromium.args,
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--single-process',
+        '--no-zygote'
+      ],
+      defaultViewport: { width: 1280, height: 900 },
       ignoreHTTPSErrors: true
     });
-
+    
     const page = await browser.newPage();
     page.setDefaultTimeout(30000);
 
