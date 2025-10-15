@@ -1,51 +1,42 @@
-// Vercel Serverless function: Puppeteer (chromium) two-step form filler
-const chromium = require('@sparticuz/chromium');
-const puppeteer = require('puppeteer-core');
+// api/signup-proxy.js
+// Serverless function for Vercel: two-step autofill via Playwright on AWS Lambda
 
-// Ensure Node serverless runtime (NOT edge)
+const chromium = require('playwright-aws-lambda');
+
 module.exports.config = {
-  runtime: 'nodejs18.x'
-  // regions: ['iad1'] // optionally pin a region
+  runtime: 'nodejs18.x'  // стабильный рантайм для lambda-билдов
+  // regions: ['iad1']    // можно закрепить регион
 };
-
-chromium.setHeadlessMode = true;
-chromium.setGraphicsMode = false;
 
 async function typeByLabelOrPlaceholder(page, { labelText, placeholder, selector, value }) {
   if (selector) {
-    await page.waitForSelector(selector, { visible: true, timeout: 20000 });
-    await page.click(selector, { clickCount: 3 });
-    await page.type(selector, value, { delay: 20 });
+    await page.locator(selector).waitFor({ state: 'visible', timeout: 20000 });
+    await page.fill(selector, value);
     return;
   }
   if (placeholder) {
-    const found = await page.$(`input[placeholder*="${placeholder}"], textarea[placeholder*="${placeholder}"]`);
-    if (found) {
-      await found.click({ clickCount: 3 });
-      await found.type(value, { delay: 20 });
+    const loc = page.locator(`input[placeholder*="${placeholder}"], textarea[placeholder*="${placeholder}"]`).first();
+    if (await loc.count()) {
+      await loc.fill(value);
       return;
     }
   }
   if (labelText) {
-    const elHandle = await page.$x(`//label[contains(normalize-space(.), "${labelText}")]/following::input[1]`);
-    if (elHandle[0]) {
-      await elHandle[0].click({ clickCount: 3 });
-      await elHandle[0].type(value, { delay: 20 });
+    const byLabel = page.getByLabel(labelText, { exact: false });
+    if (await byLabel.count()) {
+      await byLabel.fill(value);
       return;
     }
   }
   throw new Error(`Cannot find input for "${labelText || placeholder || selector}"`);
 }
 
-module.exports = async function handler(req, res) {
+module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
-
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { email, password, firstName, lastName, messengerType, messenger } = req.body || {};
   if (!email || !password || !firstName || !lastName || !messengerType || !messenger) {
@@ -54,91 +45,67 @@ module.exports = async function handler(req, res) {
 
   let browser;
   try {
-    const exe = await chromium.executablePath();
-    console.log('Chromium path:', exe);
-
-    browser = await puppeteer.launch({
-      executablePath: exe,
-      headless: chromium.headless,
-      args: [
-        ...chromium.args,
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--single-process',
-        '--no-zygote'
-      ],
-      defaultViewport: { width: 1280, height: 900 },
-      ignoreHTTPSErrors: true
+    // playwright-aws-lambda отдаёт совместимый двоичный файл + нужные либы
+    browser = await chromium.launchChromium({
+      headless: true,
+      args: chromium.args,            // набор флагов для lambda
+      executablePath: await chromium.executablePath
     });
-    
-    const page = await browser.newPage();
-    page.setDefaultTimeout(30000);
 
-    // STEP 1: email + password
-    await page.goto('https://affiliate.swipey.ai/signup', { waitUntil: 'networkidle2' });
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
 
-    const emailSel = 'input[type="email"], input[name="email"]';
-    await page.waitForSelector(emailSel, { visible: true });
-    await page.click(emailSel, { clickCount: 3 });
-    await page.type(emailSel, email, { delay: 20 });
+    // STEP 1
+    await page.goto('https://affiliate.swipey.ai/signup', { waitUntil: 'networkidle' });
 
-    const passSel = await page.$('input[type="password"]');
-    if (passSel) {
-      await page.click('input[type="password"]', { clickCount: 3 });
-      await page.type('input[type="password"]', password, { delay: 20 });
+    await page.locator('input[type="email"], input[name="email"]').first().fill(email);
+    if (await page.locator('input[type="password"]').count()) {
+      await page.locator('input[type="password"]').first().fill(password);
     } else {
       await typeByLabelOrPlaceholder(page, { placeholder: 'Password', value: password });
     }
 
-    const submit1 =
-      (await page.$x(`//button[.//text()[contains(., "Sign Up") or contains(., "Continue")]]`))[0] ||
-      (await page.$('button[type="submit"]'));
-    if (!submit1) throw new Error('Cannot find first submit button');
+    const submit1 = page.locator('button:has-text("Sign Up"), button:has-text("Continue")').first();
     await Promise.all([
-      page.waitForNavigation({ waitUntil: 'networkidle2' }).catch(() => {}),
-      submit1.click(),
+      page.waitForLoadState('networkidle').catch(() => {}),
+      submit1.click()
     ]);
 
-    // STEP 2: profile
-    await page.waitForSelector('input[placeholder*="First"], input[name*="first"], input[id*="first"]', { visible: true });
+    // STEP 2
+    await page.locator('input[placeholder*="First"], input[name*="first"], input[id*="first"]').first().waitFor({ state: 'visible' });
 
     await typeByLabelOrPlaceholder(page, { placeholder: 'First', labelText: 'First Name', value: firstName });
-    await typeByLabelOrPlaceholder(page, { placeholder: 'Last', labelText: 'Last name', value: lastName });
+    await typeByLabelOrPlaceholder(page, { placeholder: 'Last',  labelText: 'Last name',  value: lastName  });
 
-    if (await page.$('select')) {
-      const all = await page.$$eval('select option', opts => opts.map(o => ({ v: o.value, t: o.textContent.trim() })));
-      let match = all.find(o => o.t.toLowerCase().includes(messengerType.toLowerCase())) || all.find(o => o.v.toLowerCase().includes(messengerType.toLowerCase()));
-      await page.select('select', match ? match.v : messengerType);
+    // Messenger type
+    if (await page.locator('select').count()) {
+      // выбрать по тексту опции
+      const valueToSelect = await page.evaluate((want) => {
+        const sel = document.querySelector('select');
+        if (!sel) return null;
+        const opts = [...sel.options].map(o => ({ v: o.value, t: (o.textContent || '').trim() }));
+        const m = opts.find(o => o.t.toLowerCase().includes(want.toLowerCase())) || opts.find(o => o.v.toLowerCase().includes(want.toLowerCase()));
+        return m ? m.v : null;
+      }, messengerType);
+      if (valueToSelect) await page.selectOption('select', valueToSelect);
+      else await page.selectOption('select', messengerType);
     } else {
-      const dd =
-        (await page.$x(`//div[contains(@role,"listbox") or contains(@class,"select") or contains(@class,"dropdown")]`))[0] ||
-        (await page.$x(`//button[contains(@aria-haspopup,"listbox") or contains(@class,"select")]`))[0];
-      if (!dd) throw new Error('Messenger dropdown not found');
-      await dd.click();
-      const opt = (await page.$x(`//div[@role="option" or @role="menuitem" or self::li][contains(., "${messengerType}")]`))[0];
-      if (!opt) throw new Error(`Messenger option "${messengerType}" not found`);
+      // кастомный дропдаун
+      const dd = page.locator('[role="listbox"], .select, .dropdown, [aria-haspopup="listbox"]').first();
+      await dd.click().catch(() => {});
+      const opt = page.locator('[role="option"], [role="menuitem"], li', { hasText: messengerType }).first();
       await opt.click();
     }
 
     await typeByLabelOrPlaceholder(page, { placeholder: 'Skype/Telegram', labelText: 'Messenger', value: messenger });
 
-    const finishBtn =
-      (await page.$x(`//button[.//text()[contains(., "Complete") or contains(., "Sign Up") or contains(., "Finish")]]`))[0] ||
-      (await page.$('button[type="submit"]'));
-    if (!finishBtn) throw new Error('Cannot find second submit button');
+    const finishBtn = page.locator('button:has-text("Complete"), button:has-text("Sign Up"), button:has-text("Finish")').first();
     await Promise.all([
-      page.waitForNavigation({ waitUntil: 'networkidle2' }).catch(() => {}),
-      finishBtn.click(),
+      page.waitForLoadState('networkidle').catch(() => {}),
+      finishBtn.click()
     ]);
 
     const html = await page.content();
-    const ok =
-      /thank/i.test(html) ||
-      /dashboard/i.test(html) ||
-      /verify/i.test(html) ||
-      /check your email/i.test(html);
+    const ok = /thank|dashboard|verify|check your email/i.test(html);
 
     return res.status(200).json({ ok, note: ok ? 'Submitted' : 'Submitted (check target state)' });
   } catch (err) {
