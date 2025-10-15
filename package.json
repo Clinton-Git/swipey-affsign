@@ -1,13 +1,12 @@
 {
-  "name": "swipey-autosignup",
+  "name": "swipey-affsign",
   "private": true,
-  "version": "1.0.2",
+  "version": "1.1.0",
   "scripts": {
     "dev": "vercel dev",
     "start": "vercel dev"
   },
   "dependencies": {
-    "@sparticuz/chromium": "119",
-    "puppeteer-core": "20.8.1"
+    "playwright-aws-lambda": "^0.10.0"
   }
 }
