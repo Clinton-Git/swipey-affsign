@@ -1,1 +1,108 @@
-<!doctype html><html><body><h1>Registration</h1></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Registration</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial; background:#f3f5f9; }
+    .card { width: 520px; max-width: 92vw; margin: 6vh auto; background:#fff; padding:32px; border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,.06); }
+    .row { margin-bottom:14px; }
+    label { display:block; font-size:14px; color:#4b5563; margin-bottom:6px; }
+    input, select { width:100%; height:44px; border:1px solid #e5e7eb; border-radius:10px; padding:0 12px; font-size:15px; }
+    button { width:100%; height:48px; border:0; border-radius:12px; font-weight:600; font-size:16px; }
+    .primary { background:#91b9f7; color:#0b1b3a; cursor:pointer; }
+    .muted { color:#6b7280; font-size:14px; text-align:center; margin-top:10px; }
+    .hidden { display:none; }
+    .error { color:#b91c1c; font-size:14px; margin-top:8px; }
+    .success { color:#065f46; font-size:14px; margin-top:8px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2 style="text-align:center;margin:0 0 4px 0;color:#374151;">Registration</h2>
+    <p style="text-align:center;margin:0 0 18px 0;color:#6b7280;">Your credentials</p>
+
+    <form id="signupForm" autocomplete="on">
+      <div class="row">
+        <label for="email">Login</label>
+        <input id="email" name="email" type="email" placeholder="your@email.com" required />
+      </div>
+      <div class="row">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" placeholder="Password" minlength="8" required />
+      </div>
+
+      <hr style="margin:18px 0;border:none;border-top:1px solid #eee" />
+
+      <div class="row">
+        <label for="firstName">First Name</label>
+        <input id="firstName" name="firstName" placeholder="First name" required />
+      </div>
+      <div class="row">
+        <label for="lastName">Last Name</label>
+        <input id="lastName" name="lastName" placeholder="Last name" required />
+      </div>
+
+      <div class="row">
+        <label for="messengerType">Messenger type</label>
+        <select id="messengerType" name="messengerType" required>
+          <option value="" disabled selected>Choose…</option>
+          <option>Telegram</option>
+          <option>Skype</option>
+          <option>WhatsApp</option>
+          <option>WeChat</option>
+          <option>Other</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <label for="messenger">Messenger</label>
+        <input id="messenger" name="messenger" placeholder="username / phone / link" required />
+      </div>
+
+      <button class="primary" id="submitBtn" type="submit">Sign Up</button>
+      <div id="msg" class="muted"></div>
+    </form>
+  </div>
+
+  <script>
+    const form = document.getElementById('signupForm');
+    const msg = document.getElementById('msg');
+    const btn = document.getElementById('submitBtn');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      msg.textContent = '';
+      btn.disabled = true; btn.textContent = 'Processing…';
+
+      const payload = {
+        email: form.email.value.trim(),
+        password: form.password.value,
+        firstName: form.firstName.value.trim(),
+        lastName: form.lastName.value.trim(),
+        messengerType: form.messengerType.value,
+        messenger: form.messenger.value.trim(),
+      };
+
+      try {
+        const res = await fetch('/signup-proxy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Request failed');
+        msg.className = 'success'; 
+        msg.textContent = 'Completed. Check your e-mail if confirmation is required.';
+        form.reset();
+      } catch (err) {
+        msg.className = 'error';
+        msg.textContent = 'Error: ' + err.message;
+      } finally {
+        btn.disabled = false; btn.textContent = 'Sign Up';
+      }
+    });
+  </script>
+</body>
+</html>
