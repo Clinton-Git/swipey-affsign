@@ -1,15 +1,13 @@
 {
-  "cleanUrls": true,
-  "public": true,
+  "version": 2,
   "functions": {
     "api/signup-proxy.js": {
       "maxDuration": 90,
-      "memory": 1536,
-      "runtime": "nodejs20"
+      "memory": 1536
     }
   },
-  "rewrites": [
-    { "source": "/", "destination": "/public/index.html" },
-    { "source": "/signup-proxy", "destination": "/api/signup-proxy" }
+  "routes": [
+    { "src": "^/$", "dest": "/public/index.html" },
+    { "src": "^/signup-proxy$", "dest": "/api/signup-proxy.js" }
   ]
 }
