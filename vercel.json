@@ -5,17 +5,11 @@
     "api/signup-proxy.js": {
       "maxDuration": 90,
       "memory": 1536,
-      "runtime": "nodejs20.x"
+      "runtime": "nodejs20"
     }
   },
   "rewrites": [
-    {
-      "source": "/",
-      "destination": "/public/index.html"
-    },
-    {
-      "source": "/signup-proxy",
-      "destination": "/api/signup-proxy"
-    }
+    { "source": "/", "destination": "/public/index.html" },
+    { "source": "/signup-proxy", "destination": "/api/signup-proxy" }
   ]
 }
