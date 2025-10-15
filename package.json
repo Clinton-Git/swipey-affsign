@@ -1,13 +1,13 @@
 {
   "name": "swipey-autosignup",
   "private": true,
-  "version": "1.0.1",
+  "version": "1.0.2",
   "scripts": {
     "dev": "vercel dev",
     "start": "vercel dev"
   },
   "dependencies": {
-    "@sparticuz/chromium": "121",
-    "puppeteer-core": "22"
+    "@sparticuz/chromium": "119",
+    "puppeteer-core": "20.8.1"
   }
 }
