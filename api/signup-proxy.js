@@ -46,11 +46,7 @@ module.exports = async (req, res) => {
   let browser;
   try {
     // playwright-aws-lambda отдаёт совместимый двоичный файл + нужные либы
-    browser = await chromium.launchChromium({
-      headless: true,
-      args: chromium.args,            // набор флагов для lambda
-      executablePath: await chromium.executablePath
-    });
+   browser = await chromium.launchChromium({ headless: true });
 
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
 
